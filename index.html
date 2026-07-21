@@ -457,17 +457,17 @@ const LEVELS = [
 /* ---------------- Bunnies ---------------- */
 const BUNNIES=[
   {name:'JAKE', blurb:'balanced classic', body:'#e8e4de', head:'#f2efe9',
-   speed:250, jump:480, fuel:5, w:26, h:34, cheer:"Nailed it!"},
-  {name:'CHASE', blurb:'fastest runner · small tank', body:'#6b4a3a', head:'#7d5a48',
-   speed:300, jump:470, fuel:4, w:26, h:34, cheer:"Too fast for ya!"},
-  {name:'AYLA', blurb:'big gas tank · slower', body:'#e8b45c', head:'#f2c878',
-   speed:230, jump:465, fuel:7, w:28, h:34, cheer:"Full tank, baby!"},
+   speed:250, jump:480, w:26, h:34, cheer:"Nailed it!"},
+  {name:'CHASE', blurb:'fastest runner', body:'#6b4a3a', head:'#7d5a48',
+   speed:300, jump:470, w:26, h:34, cheer:"Too fast for ya!"},
+  {name:'AYLA', blurb:'starts with extra heart', body:'#e8b45c', head:'#f2c878',
+   speed:230, jump:465, w:28, h:34, bonusHeart:1, cheer:"Full of heart!"},
   {name:'LUKE', blurb:'high hopper · tiny', body:'#b8b8c8', head:'#cdcdda',
-   speed:250, jump:545, fuel:4, w:22, h:30, cheer:"To the moon!"},
+   speed:250, jump:545, w:22, h:30, cheer:"To the moon!"},
   {name:'COLE', blurb:'potent toots · slower', body:'#4a4a55', head:'#5c5c68',
-   speed:228, jump:475, fuel:5, w:26, h:34, gasMul:1.35, cheer:"Whew, clear the room!"},
+   speed:228, jump:475, w:26, h:34, gasMul:1.35, cheer:"Whew, clear the room!"},
   {name:'KAYLEE', blurb:'floaty jumps', body:'#eec9d2', head:'#f6dde4',
-   speed:255, jump:470, fuel:5, w:26, h:34, floatMul:0.82, cheer:"Floated right past!"},
+   speed:255, jump:470, w:26, h:34, floatMul:0.82, cheer:"Floated right past!"},
 ];
 let selIdx=0;
 let maxUnlocked=0, menuChoice=0;   // menuChoice: 0=play, 1=level select
@@ -490,7 +490,7 @@ const blockHits = {};
 const P = {
   x:0,y:0,vx:0,vy:0,w:26,h:34,
   face:1,onGround:false,coyote:0,jbuf:0,
-  fuel:3,maxFuel:5, hp:3, maxHp:5, inv:0,
+  hp:3, maxHp:5, inv:0,
   sq:1, canBoost:true, pound:false, poundSpin:0,
   chili:0, star:0,
   earWob:0,
@@ -538,13 +538,13 @@ function resetPlayer(){
 }
 function startLevel(idx,fresh){
   G.level=idx; parseLevel(idx); resetPlayer();
-  if(fresh){ P.hp=3;P.fuel=3;P.chili=0;P.star=0; }
+  if(fresh){ P.hp=3+(G.bunny.bonusHeart||0); P.chili=0;P.star=0; }
 }
 function newGame(startAt){
   G.bunny=BUNNIES[selIdx];
-  P.maxFuel=G.bunny.fuel; P.w=G.bunny.w; P.h=G.bunny.h;
+  P.w=G.bunny.w; P.h=G.bunny.h;
   G.score=0;G.coins=0;G.toots=0;
-  startLevel(startAt||0,true); P.fuel=Math.min(3,P.maxFuel); G.state='play';
+  startLevel(startAt||0,true); G.state='play';
 }
 
 /* ---------------- Input ---------------- */
@@ -601,7 +601,7 @@ function menuAction(){
     if(levSel>maxUnlocked){ buzz(); }         // locked — deny
     else newGame(levSel);
   }
-  else if(G.state==='dead'){ startLevel(G.level,true); P.fuel=Math.min(3,P.maxFuel); G.state='play'; }
+  else if(G.state==='dead'){ startLevel(G.level,true); G.state='play'; }
 }
 let levSel=0;
 const left =()=>keys['ArrowLeft']||keys['KeyA'];
@@ -752,38 +752,22 @@ function update(dt){
   downPressed=false;
   if(P.pound) P.poundSpin+=dt*20;
 
-  // Jump (hop = toot!)
+  // Jump (hop = toot! always free — bunnies are naturally gassy)
   if(P.jbuf>0 && P.coyote>0 && !P.pound){
     P.jbuf=0;P.coyote=0;
     P.vy=-(JUMP+Math.abs(P.vx)*0.2); P.sq=1.35; P.canBoost=true;
-    const free=P.chili>0;
-    if(free||P.fuel>=0.34){
-      if(!free)P.fuel-=0.34;
-      spawnCloud(P.x+P.w/2,P.y+P.h-2,false);
-      toot(true,free);
-    } else {
-      for(let i=0;i<3;i++)parts.push({x:P.x+P.w/2,y:P.y+P.h,vx:(Math.random()-.5)*40,vy:20,life:0.3,r:2,col:'#ccc',gas:false});
-    }
+    spawnCloud(P.x+P.w/2,P.y+P.h-2,false);
+    toot(true,P.chili>0);
   }
-  // DOUBLE JUMP (once per airtime): fueled = FART BOOST, dry = ear flap
+  // DOUBLE JUMP — free fart boost, once per airtime (resets on landing)
   else if(P.jbuf>0 && !P.onGround && !P.pound && P.canBoost){
     P.jbuf=0; P.canBoost=false;
     const dir = left()? -1 : right()? 1 : 0;
-    const fueled = P.chili>0 || P.fuel>=1;
-    if(fueled){
-      if(P.chili<=0) P.fuel-=1;
-      P.vy=-JUMP*0.98; P.sq=1.5;
-      if(dir) P.vx=dir*MAXV*1.4;              // long boosted arc
-      spawnCloud(P.x+P.w/2,P.y+P.h-2,true);
-      toot(false,P.chili>0);
-      G.shake=Math.max(G.shake,0.25);
-    } else {
-      P.vy=-JUMP*0.75; P.sq=1.35;             // plain double jump, no gas needed
-      if(dir) P.vx=dir*MAXV*1.15;
-      flap();
-      for(let i=0;i<5;i++)parts.push({x:P.x+P.w/2+(Math.random()-.5)*16,y:P.y+P.h-4,
-        vx:(Math.random()-.5)*70,vy:30+Math.random()*40,life:0.3,r:3,col:'#fff',gas:false});
-    }
+    P.vy=-JUMP*0.98; P.sq=1.5;
+    if(dir) P.vx=dir*MAXV*1.4;              // hold a direction for a longer arc
+    spawnCloud(P.x+P.w/2,P.y+P.h-2,true);
+    toot(false,P.chili>0);
+    G.shake=Math.max(G.shake,0.25);
   }
   jumpPressed=false;
 
@@ -803,13 +787,13 @@ function update(dt){
 
   if(P.y>ROWS*TILE+80) damage(true);
 
-  /* --- carrots --- */
+  /* --- carrots (heal hearts) --- */
   for(const c of carrots){
     c.t+=dt;
     if(!c.got && Math.abs(P.x+P.w/2-c.x)<24 && Math.abs(P.y+P.h/2-c.y)<26){
-      c.got=true; ding();
-      P.fuel=Math.min(P.maxFuel,P.fuel+1);
-      G.score+=100; scorePop(c.x,c.y-10,'+100','#ffb347');
+      c.got=true;
+      if(P.hp<P.maxHp){ P.hp++; jingle(); scorePop(c.x,c.y-10,'+1 HEART','#ff5a7a'); }
+      else { ding(); G.score+=100; scorePop(c.x,c.y-10,'+100','#ffb347'); }
       for(let i=0;i<6;i++)parts.push({x:c.x,y:c.y,vx:(Math.random()-.5)*120,vy:-Math.random()*120,life:0.4,r:3,col:'#ff8c42',gas:false});
     }
   }
@@ -919,7 +903,8 @@ function update(dt){
       if(P.x<e.x+e.w && P.x+P.w>e.x && P.y<ey+eh && P.y+P.h>ey){
         if(P.star>0){ hitEnemy(e,3,'star'); continue; }
         if(P.pound){ hitEnemy(e,3,'stomp'); P.vy=-JUMP*0.5; continue; }
-        if(P.vy>60 && P.y+P.h-ey<eh*0.6 && e.kind!=='mole'){
+        // safe stomp: descending onto the upper part of a (non-mole) critter
+        if(P.vy>20 && P.y+P.h-ey<eh*0.75 && e.kind!=='mole'){
           hitEnemy(e,1,'stomp'); P.vy=-JUMP*0.6; P.sq=1.3; P.canBoost=true;
         } else if(P.inv<=0) damage(false);
       }
@@ -1208,7 +1193,7 @@ function drawSelect(){
     cx.fillStyle='rgba(255,255,255,0.8)';
     cx.fillText(b.blurb,bx,H*0.64+18);
     // stat pips
-    const stats=[['SPD',(b.speed-200)/100],['JMP',(b.jump-440)/110],['GAS',b.fuel/7]];
+    const stats=[['SPD',(b.speed-200)/100],['JMP',(b.jump-440)/110],['HP',(3+(b.bonusHeart||0))/5]];
     stats.forEach(([lab,v],si)=>{
       const sy=H*0.64+36+si*14;
       cx.font='bold 9px "Segoe UI",sans-serif';cx.textAlign='right';
@@ -1693,27 +1678,15 @@ function drawCheckpoints(){
 }
 
 function drawHUD(L){
-  const pipsEnd=62+P.maxFuel*26;
+  const heartsEnd=20+P.maxHp*24;
   cx.fillStyle='rgba(20,15,40,0.55)';
-  roundRect(12,12,Math.max(332,pipsEnd+96),58,10);cx.fill();
-  for(let i=0;i<P.maxHp;i++) heart(32+i*24,30, i<P.hp);
-  cx.font='bold 12px "Segoe UI",sans-serif';cx.textAlign='left';
-  cx.fillStyle='#c7e87b';cx.fillText('GAS',26,58);
-  for(let i=0;i<P.maxFuel;i++){
-    const fill=Math.max(0,Math.min(1,P.fuel-i));
-    const bx=62+i*26;
-    cx.fillStyle='rgba(255,255,255,0.15)';
-    roundRect(bx,46,20,14,4);cx.fill();
-    if(fill>0){
-      cx.fillStyle= P.chili>0? '#ff6b3d':'#ff8c42';
-      roundRect(bx,46,20*fill,14,4);cx.fill();
-    }
-  }
-  drawCoin(pipsEnd+18,53,G.time*0.6);
+  roundRect(12,12,Math.max(230,heartsEnd+92),40,10);cx.fill();
+  for(let i=0;i<P.maxHp;i++) heart(32+i*24,32, i<P.hp);
+  drawCoin(heartsEnd+16,33,G.time*0.6);
   cx.font='bold 15px "Segoe UI",sans-serif';cx.fillStyle='#fff';cx.textAlign='left';
-  cx.fillText('× '+G.coins,pipsEnd+32,58);
+  cx.fillText('× '+G.coins,heartsEnd+30,38);
   // status timers
-  let ty=78;
+  let ty=60;
   if(P.chili>0){
     cx.fillStyle='rgba(20,15,40,0.55)';roundRect(12,ty,150,16,8);cx.fill();
     cx.fillStyle='#ff6b3d';roundRect(14,ty+2,146*(P.chili/12),12,6);cx.fill();
@@ -1768,10 +1741,10 @@ function drawTitle(){
   bigText('a gassy bunny adventure · 4 levels',H*0.24+40+bob,20,'#ffd9a0');
   cx.font='15px "Segoe UI",sans-serif';cx.fillStyle='#fff';cx.textAlign='center';
   const lines=[
-    '← → / A D  move      SPACE / ↑  hop (every hop toots!)',
-    'SPACE mid-air · DOUBLE JUMP — hold a direction to fly further',
-    'with gas it\'s a FART BOOST: higher, longer, and it blasts enemies',
+    '← → / A D  move      SPACE / ↑  hop (every hop toots — for free!)',
+    'SPACE mid-air · DOUBLE JUMP fart-boost, blasts enemies (hold a way to fly further)',
     '↓ / S mid-air · BUNNY STOMP — shockwave, breaks bricks',
+    'Jump on critters to squish them safely. Carrots heal hearts!',
     'Bonk ? blocks for coins & power-ups. 20 coins = extra heart.',
     'M mutes · sound & music start after your first key press',
   ];
