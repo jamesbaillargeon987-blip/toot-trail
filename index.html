@@ -503,6 +503,37 @@ const LEVELS = [
 "###########################   #############################   ###########################   #############################   #############################   #######################################",
 "###########################   #############################   ###########################   #############################   #############################   #######################################"
 ]
+},
+{
+"name": "WINDY ORCHARD",
+"sky": [
+"#f0a860",
+"#f7c98f",
+"#f6e3c4"
+],
+"hill": "#c98b4a",
+"dirt": "#8a5a34",
+"dirtDark": "#6f4728",
+"grass": "#c2883a",
+"grassLight": "#dba955",
+"windy": true,
+"clear": "What a gust! You blew through like a leaf!",
+"rows": [
+"                                                                                                                                                                                                        ",
+"                                                                                                                                                                                                        ",
+"                                                                                                                                                                                                        ",
+"                                                                                                                                                                                                        ",
+"        o               o                   o         o                   o                 o       o       o         o              o o        o       o c                         o             o     ",
+"                                 o                                                                o   o                            o     o               ====             o                             ",
+"                               o   o          y     y                           y         c      >>><<<       y     y     y       >>>>>>>>>      <<<c         y         o   o         y                 ",
+"                  y           >>>>>>>>    c                    <o<o<<<<                 =====    >>><<<                           >>>>>>>>>      <<====               >>>>>>>>>                         ",
+"              c       ?       >>>>>>>>  =====   5              <<<<<<<<  H          oo           >>===<   C     c       c         >>>>>>>>>   c  <<<  L               >>>>>>>>>           cc    B       ",
+"                          ooo >>>>>>>>                    oo   <====<<<                       oo >>><<<                       ooo >>>===>>>  ====                     >>>>>>>>>                BB       ",
+"    P     s                   >>>>>>>>                  s      <<<<<<<<      s      ^^           >>><<<          s     s          >>>>>>>>>                      s  k >>>>>>>>>   s           BBB   F   ",
+"###############################      ##########################      ############################      ############################      ##############################       ##########################",
+"###############################      ##########################      ############################      ############################      ##############################       ##########################",
+"###############################      ##########################      ############################      ############################      ##############################       ##########################"
+]
 }
 ];
 
@@ -528,7 +559,7 @@ let selIdx=0;
    ========================== */
 const UNLOCK_ALL = true;
 let maxUnlocked=0, menuChoice=0;   // menuChoice: 0=play, 1=level select
-try{ const s=localStorage.getItem('toottrail_unlocked'); if(s!=null) maxUnlocked=Math.max(0,Math.min(4,parseInt(s)||0)); }catch(e){}
+try{ const s=localStorage.getItem('toottrail_unlocked'); if(s!=null) maxUnlocked=Math.max(0,Math.min(5,parseInt(s)||0)); }catch(e){}
 if(UNLOCK_ALL) maxUnlocked=99;
 function unlock(idx){
   if(UNLOCK_ALL) return;
@@ -543,7 +574,8 @@ const G = {
 };
 let grid=[], ROWS=0, COLS=0, LEVEL_W=0;
 let carrots=[], enemies=[], clouds=[], parts=[], pops=[], spikes=[],
-    flag=null, checkpointObjs=[], powerups=[], coinPops=[], bumps=[], floatCoins=[], poops=[];
+    flag=null, checkpointObjs=[], powerups=[], coinPops=[], bumps=[], floatCoins=[], poops=[],
+    winds=[], windMap={}, leaves=[];
 const blockHits = {};
 
 const P = {
@@ -572,6 +604,7 @@ function parseLevel(idx){
   grid=L.rows.map(r=>r.padEnd(COLS,' ').split(''));
   carrots=[];enemies=[];clouds=[];parts=[];pops=[];spikes=[];flag=null;
   checkpointObjs=[];powerups=[];coinPops=[];bumps=[];floatCoins=[];poops=[];
+  winds=[];windMap={};leaves=[];
   for(const k in blockHits) delete blockHits[k];
   for(let y=0;y<ROWS;y++)for(let x=0;x<COLS;x++){
     const ch=grid[y][x], px=x*TILE, py=y*TILE;
@@ -583,6 +616,9 @@ function parseLevel(idx){
     else if(ch==='w') enemies.push({kind:'crow',x:px,y:py,w:30,h:22,baseY:py,t:Math.random()*6,hp:1,dead:false,dir:-1,poopT:1.5+Math.random()*2.5,tell:0});
     else if(ch==='b') enemies.push({kind:'crow',snow:true,x:px,y:py,w:30,h:22,baseY:py,t:Math.random()*6,hp:1,dead:false,dir:-1,poopT:0.6+Math.random()*0.9,tell:0});
     else if(ch==='n') enemies.push({kind:'snowball',x:px+4,y:py+TILE-26,w:28,h:26,vx:(Math.random()<0.5?-1:1)*54,roll:0,hp:1,dead:false,t:Math.random()*6});
+    else if(ch==='y') enemies.push({kind:'wasp',x:px+3,y:py+4,w:26,h:20,baseX:px+3,baseY:py+4,t:Math.random()*6,
+      state:'hover',timer:0,vx:0,vy:0,dir:-1,hp:1,dead:false});
+    else if(ch==='>'||ch==='<'){ winds.push({tx:x,ty:y,dir:ch==='>'?1:-1}); }
     else if(ch==='m') enemies.push({kind:'mole',x:px+4,y:py+TILE,w:28,h:30,t:Math.random()*3,up:0,hp:1,dead:false});
     else if(ch==='d') enemies.push({kind:'dust',x:px+6,y:py+TILE-22,w:24,h:22,dir:Math.random()<0.5?-1:1,hopT:Math.random(),vx:0,vy:0,onG:false,hp:1,dead:false,t:Math.random()*6});
     else if(ch==='^'){ spikes.push({x:px,y:py}); clear=false; }
@@ -591,6 +627,7 @@ function parseLevel(idx){
     else clear=false;
     if(clear) grid[y][x]=' ';
   }
+  for(const w of winds) windMap[w.tx+','+w.ty]=w.dir;
 }
 function resetPlayer(){
   P.vx=0;P.vy=0;P.onGround=false;P.inv=1.5;P.sq=1;P.pound=false;
@@ -840,8 +877,15 @@ function update(dt){
   }
   jumpPressed=false;
 
-  moveX(dt); moveY(dt);
+  // WIND: gusts drift you sideways — much stronger while airborne
+  P.wind=0;
+  if(winds.length){
+    const wtx=Math.floor((P.x+P.w/2)/TILE), wty=Math.floor((P.y+P.h/2)/TILE);
+    const d=windMap[wtx+','+wty];
+    if(d) P.wind=d*(P.onGround?58:145);
+  }
 
+  moveX(dt); moveY(dt);
   P.sq += (1-P.sq)*Math.min(1,dt*10);
   P.inv=Math.max(0,P.inv-dt);
   P.chili=Math.max(0,P.chili-dt);
@@ -911,6 +955,7 @@ function update(dt){
   /* --- clouds --- */
   for(const cl of clouds){
     cl.life-=dt; cl.y-=14*dt; cl.r+=(cl.big?30:14)*dt;
+    if(winds.length){ const d=windMap[Math.floor(cl.x/TILE)+','+Math.floor(cl.y/TILE)]; if(d) cl.x+=d*90*dt; }
     for(const e of enemies){
       if(e.dead||cl.hit.has(e)) continue;
       if(e.kind==='mole'&&e.up<0.5) continue;
@@ -954,6 +999,40 @@ function update(dt){
       e.roll+=e.vx*dt*0.09;
       const ahead = e.vx<0? e.x-2 : e.x+e.w+2;
       if(isSolidAt(ahead,e.y+e.h/2) || !isSolidAt(ahead,e.y+e.h+4)) e.vx*=-1;
+    }
+    else if(e.kind==='wasp'){
+      const pcx=P.x+P.w/2, pcy=P.y+P.h/2;
+      const ecx=e.x+e.w/2, ecy=e.y+e.h/2;
+      if(e.state==='hover'){
+        e.y=e.baseY+Math.sin(e.t*3)*8;
+        e.x+=Math.sin(e.t*1.1)*14*dt;
+        e.dir = pcx<ecx? -1:1;
+        // spot the bunny: close horizontally and at/below the wasp
+        if(Math.abs(pcx-ecx)<210 && pcy>ecy-30){ e.state='windup'; e.timer=0.42; }
+      }
+      else if(e.state==='windup'){
+        e.timer-=dt;
+        e.y=e.baseY+Math.sin(e.t*3)*8;
+        if(e.timer<=0){
+          const dx=pcx-ecx, dy=pcy-ecy, len=Math.max(1,Math.hypot(dx,dy));
+          e.vx=dx/len*330; e.vy=dy/len*330;
+          e.state='dive'; e.timer=1.15;
+        }
+      }
+      else if(e.state==='dive'){
+        e.timer-=dt;
+        e.x+=e.vx*dt; e.y+=e.vy*dt;
+        const hitWall=isSolidAt(e.x+e.w/2,e.y+e.h/2);
+        if(hitWall||e.timer<=0){ e.state='back'; e.timer=1.6; }
+      }
+      else { // back — return to perch
+        e.timer-=dt;
+        e.x+=((e.baseX)-e.x)*Math.min(1,dt*2.2);
+        e.y+=((e.baseY)-e.y)*Math.min(1,dt*2.6);
+        if(e.timer<=0 || (Math.abs(e.x-e.baseX)<6 && Math.abs(e.y-e.baseY)<6)){
+          e.x=e.baseX; e.state='hover';
+        }
+      }
     }
     else if(e.kind==='mole'){
       const cyc=e.t%3.2;
@@ -1059,14 +1138,15 @@ function update(dt){
 }
 
 function moveX(dt){
-  P.x+=P.vx*dt;
-  if(P.vx>0){
+  P.x+=(P.vx+(P.wind||0))*dt;
+  const moving=P.vx+(P.wind||0);
+  if(moving>0){
     if(isSolidAt(P.x+P.w,P.y+4)||isSolidAt(P.x+P.w,P.y+P.h-4)){
-      P.x=Math.floor((P.x+P.w)/TILE)*TILE-P.w-0.01; P.vx=0;
+      P.x=Math.floor((P.x+P.w)/TILE)*TILE-P.w-0.01; if(P.vx>0)P.vx=0;
     }
-  } else if(P.vx<0){
+  } else if(moving<0){
     if(isSolidAt(P.x,P.y+4)||isSolidAt(P.x,P.y+P.h-4)){
-      P.x=(Math.floor(P.x/TILE)+1)*TILE+0.01; P.vx=0;
+      P.x=(Math.floor(P.x/TILE)+1)*TILE+0.01; if(P.vx<0)P.vx=0;
     }
   }
   P.x=Math.max(0,Math.min(LEVEL_W-P.w,P.x));
@@ -1140,13 +1220,13 @@ function hitEnemy(e,dmg,how){
   G.hitstop=0.04;
   if(e.hp<=0){
     e.dead=true;
-    const val= e.kind==='crow'?(e.snow?350:300): e.kind==='mole'?250: e.kind==='dust'?150: e.kind==='snowball'?180:200;
+    const val= e.kind==='crow'?(e.snow?350:300): e.kind==='wasp'?280: e.kind==='mole'?250: e.kind==='dust'?150: e.kind==='snowball'?180:200;
     G.score+=val;
     const label= how==='gas'?'GASSED! +'+val : how==='star'?'LUCKY! +'+val : how==='bonk'?'BONKED! +'+val : '+'+val;
     scorePop(e.x+e.w/2,e.y-8,label, how==='gas'?'#a8d84a': how==='star'?'#7ddf7d':'#fff');
     if(how==='gas') G.shake=Math.max(G.shake,0.3);
     squish();
-    for(let i=0;i<10;i++)parts.push({x:e.x+e.w/2,y:e.y+e.h/2,vx:(Math.random()-.5)*220,vy:-Math.random()*200,life:0.5,r:3,col:e.kind==='crow'?(e.snow?'#dbe8f2':'#444'): e.kind==='dust'?'#b5b2bd': e.kind==='snowball'?'#ffffff':'#b08968',gas:false});
+    for(let i=0;i<10;i++)parts.push({x:e.x+e.w/2,y:e.y+e.h/2,vx:(Math.random()-.5)*220,vy:-Math.random()*200,life:0.5,r:3,col:e.kind==='crow'?(e.snow?'#dbe8f2':'#444'): e.kind==='dust'?'#b5b2bd': e.kind==='snowball'?'#ffffff': e.kind==='wasp'?'#f2c230':'#b08968',gas:false});
   }
 }
 function damage(pit){
@@ -1178,6 +1258,7 @@ function draw(){
   cx.save();
   cx.translate(-Math.floor(G.camX),0);
   drawTiles(L);
+  drawWind();
   drawCheckpoints();
   drawFlag();
   drawCarrots();
@@ -1417,6 +1498,7 @@ function drawBackdrop(L){
     puffCloud(wx,wy,26);
   }
   if(L.snow) drawSnowfall();
+  if(L.windy) drawLeaves(L);
 }
 function drawSnowfall(){
   // three parallax layers of drifting flakes
@@ -1629,6 +1711,39 @@ function drawEnemies(){
         cx.beginPath();cx.ellipse(3,9,3.5,3,0,0,7);cx.fill();
       }
     }
+    else if(e.kind==='wasp'){
+      cx.translate(e.x+e.w/2,e.y+e.h/2);
+      let ang=0;
+      if(e.state==='dive') ang=Math.atan2(e.vy,e.vx)+(e.vx<0?Math.PI:0);
+      cx.rotate(ang);
+      cx.scale(e.state==='dive'? (e.vx<0?-1:1) : e.dir, 1);
+      if(e.state==='windup') cx.translate(Math.sin(e.timer*70)*2.5,0);
+      // wings (fast blur)
+      const wf=Math.sin(e.t*40)*4;
+      cx.fillStyle='rgba(232,244,255,0.55)';
+      cx.beginPath();cx.ellipse(-1,-9-wf*0.3,9,4.5,-0.5,0,7);cx.fill();
+      cx.beginPath();cx.ellipse(3,-8+wf*0.3,7,3.5,-0.3,0,7);cx.fill();
+      // body
+      cx.fillStyle='#f2c230';
+      cx.beginPath();cx.ellipse(0,0,12,8,0,0,7);cx.fill();
+      cx.fillStyle='#2b2620';
+      cx.beginPath();cx.ellipse(3,0,2.6,7.4,0,0,7);cx.fill();
+      cx.beginPath();cx.ellipse(8,0,2.2,5.6,0,0,7);cx.fill();
+      // stinger
+      cx.beginPath();cx.moveTo(12,0);cx.lineTo(18,1.5);cx.lineTo(12,3);cx.fill();
+      // head + eye
+      cx.fillStyle='#3a332a';
+      cx.beginPath();cx.arc(-10,-1,6,0,7);cx.fill();
+      cx.fillStyle='#fff';cx.beginPath();cx.arc(-12,-3,2.4,0,7);cx.fill();
+      cx.fillStyle='#111';cx.beginPath();cx.arc(-12.7,-3,1.2,0,7);cx.fill();
+      // antennae
+      cx.strokeStyle='#3a332a';cx.lineWidth=1.3;
+      cx.beginPath();cx.moveTo(-12,-6);cx.lineTo(-16,-11);cx.moveTo(-9,-7);cx.lineTo(-11,-13);cx.stroke();
+      if(e.state==='windup'){ // angry spark
+        cx.fillStyle='#ff5a5a';
+        cx.beginPath();cx.arc(-6,-14,2.2,0,7);cx.fill();
+      }
+    }
     else if(e.kind==='snowball'){
       cx.translate(e.x+e.w/2,e.y+e.h/2);
       const d=Math.sign(e.vx)||1;
@@ -1755,6 +1870,56 @@ function drawPoops(){
       cx.beginPath();cx.arc(q.x+q.w/2-1.6,q.y+q.h/2-2,1.6,0,7);cx.fill();
     }
   }
+}
+function drawWind(){
+  if(!winds.length) return;
+  const x0=G.camX-TILE, x1=G.camX+W+TILE;
+  for(const w of winds){
+    const px=w.tx*TILE, py=w.ty*TILE;
+    if(px<x0||px>x1) continue;
+    cx.save();
+    // three streaks per cell, scrolling in the wind direction
+    for(let s=0;s<3;s++){
+      const phase=((G.time*(150+s*40)*w.dir)%TILE+TILE)%TILE;
+      const sx=px+(w.dir>0? phase : TILE-phase);
+      const sy=py+8+s*11;
+      const len=13+s*3;
+      const a=0.16+0.10*Math.sin(G.time*5+s+w.tx);
+      cx.strokeStyle=`rgba(255,255,255,${a})`;
+      cx.lineWidth=2;
+      cx.beginPath();
+      cx.moveTo(sx,sy); cx.lineTo(sx+len*w.dir,sy);
+      cx.stroke();
+      // arrowhead
+      cx.beginPath();
+      cx.moveTo(sx+len*w.dir,sy);
+      cx.lineTo(sx+(len-5)*w.dir,sy-3);
+      cx.moveTo(sx+len*w.dir,sy);
+      cx.lineTo(sx+(len-5)*w.dir,sy+3);
+      cx.stroke();
+    }
+    cx.restore();
+  }
+}
+function drawLeaves(L){
+  // autumn leaves streaming across the screen
+  const cols=['#d9682f','#e0913a','#c04a2a','#b8892f','#9c5a2c'];
+  for(let i=0;i<34;i++){
+    const seed=i*97.3;
+    const speed=48+(i%5)*22;
+    let lx=(seed*13.7 + G.time*speed - G.camX*0.35) % (W+120);
+    if(lx<0) lx+=W+120;
+    const ly=((seed*7.1 + Math.sin(G.time*1.3+i)*46 + G.time*13) % (H+60));
+    const rot=G.time*(2+(i%4))+i;
+    cx.save();
+    cx.translate(lx-60,ly-30);
+    cx.rotate(rot);
+    cx.fillStyle=cols[i%cols.length];
+    cx.globalAlpha=0.75;
+    cx.beginPath();cx.ellipse(0,0,5,2.6,0,0,7);cx.fill();
+    cx.restore();
+  }
+  cx.globalAlpha=1;
 }
 function drawClouds(){
   for(const cl of clouds){
@@ -1927,7 +2092,7 @@ function drawTitle(){
   overlay(0.45);
   const bob=Math.sin(G.time*2)*6;
   bigText('TOOT TRAIL',H*0.24+bob,64,'#a8d84a');
-  bigText('a gassy bunny adventure · 5 levels',H*0.24+40+bob,20,'#ffd9a0');
+  bigText('a gassy bunny adventure · 6 levels',H*0.24+40+bob,20,'#ffd9a0');
   cx.font='15px "Segoe UI",sans-serif';cx.fillStyle='#fff';cx.textAlign='center';
   const lines=[
     '← → / A D  move      SPACE / ↑  hop (every hop toots — for free!)',
@@ -1975,7 +2140,7 @@ function wrapText(txt,cxp,y,maxw,lh){
 function drawWin(){
   overlay(0.5);
   bigText('SILENT BUT VICTORIOUS',H*0.32,44,'#a8d84a');
-  bigText('all 5 levels cleared!',H*0.32+36,22,'#ffd9a0');
+  bigText('all 6 levels cleared!',H*0.32+36,22,'#ffd9a0');
   bigText('score '+G.score+'  ·  coins '+G.coins+'  ·  toots '+G.toots,H*0.32+70,20,'#fff');
   bigText('best '+G.best,H*0.32+98,16,'#fff');
   if(Math.floor(G.time*2)%2===0) bigText('PRESS SPACE · PICK A NEW BUNNY',H*0.68,22,'#8ed8f8');
