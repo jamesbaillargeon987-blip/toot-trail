@@ -3,6 +3,9 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
 <title>TOOT TRAIL · A Gassy Bunny Adventure</title>
 <style>
   *{margin:0;padding:0;box-sizing:border-box;}
@@ -558,6 +561,7 @@ let selIdx=0;
    false = normal play, levels unlock as you clear them
    ========================== */
 const UNLOCK_ALL = true;
+const BUILD = 'v6 · windy orchard';   // shown on the title screen so you can tell which upload is live
 let maxUnlocked=0, menuChoice=0;   // menuChoice: 0=play, 1=level select
 try{ const s=localStorage.getItem('toottrail_unlocked'); if(s!=null) maxUnlocked=Math.max(0,Math.min(5,parseInt(s)||0)); }catch(e){}
 if(UNLOCK_ALL) maxUnlocked=99;
@@ -2104,6 +2108,9 @@ function drawTitle(){
   ];
   lines.forEach((l,i)=>cx.fillText(l,W/2,H*0.46+i*24));
   if(Math.floor(G.time*2)%2===0) bigText('PRESS SPACE TO PICK YOUR BUNNY',H*0.82,24,'#8ed8f8');
+  cx.font='11px "Segoe UI",sans-serif';cx.textAlign='right';
+  cx.fillStyle='rgba(255,255,255,0.45)';
+  cx.fillText(BUILD,W-14,H-12);
 }
 function drawDead(){
   overlay(0.55);
