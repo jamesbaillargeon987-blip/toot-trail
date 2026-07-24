@@ -642,6 +642,29 @@ let selIdx=0;
    ========================== */
 const UNLOCK_ALL = true;
 const BUILD = 'v11 · struggle free';   // shown on the title screen so you can tell which upload is live
+
+/* ---- SELF-UPDATE: if a newer build is live on the server, reload into it ----
+   Browsers (especially Safari) hang onto the cached page. On startup we quietly
+   re-fetch this same file with cache bypassed, compare build stamps, and if the
+   server has something newer we reload straight into it. */
+let UPDATING=false;
+(function selfUpdate(){
+  try{
+    if(typeof location==='undefined'||typeof fetch!=='function') return;
+    if(location.protocol==='file:') return;            // local file, nothing to check
+    fetch(location.pathname+'?_cb='+Date.now(), {cache:'no-store'})
+      .then(r=>r.ok? r.text() : null)
+      .then(txt=>{
+        if(!txt) return;
+        const m=txt.match(/const BUILD = '([^']*)'/);
+        if(m && m[1] && m[1]!==BUILD){
+          UPDATING=true;
+          location.replace(location.pathname+'?v='+encodeURIComponent(m[1]));
+        }
+      })
+      .catch(()=>{});
+  }catch(e){}
+})();
 let maxUnlocked=0, menuChoice=0;   // menuChoice: 0=play, 1=level select
 try{ const s=localStorage.getItem('toottrail_unlocked'); if(s!=null) maxUnlocked=Math.max(0,Math.min(6,parseInt(s)||0)); }catch(e){}
 if(UNLOCK_ALL) maxUnlocked=99;
@@ -753,6 +776,9 @@ addEventListener('keydown',e=>{
       if(e.code==='ArrowRight'||e.code==='KeyD'){ levSel=(levSel+1)%LEVELS.length; blip(); }
     }
     if(e.code==='KeyM') setMute(!muted);
+    if(e.code==='KeyR'){                        // force-refresh past any cache
+      try{ location.replace(location.pathname+'?v='+Date.now()); }catch(_){}
+    }
   }
   keys[e.code]=true;
   if(G.state!=='play'&&G.state!=='clear'&&G.state!=='victory' && (e.code==='Space'||e.code==='Enter')) menuAction();
@@ -2759,6 +2785,16 @@ function drawTitle(){
   cx.font='11px "Segoe UI",sans-serif';cx.textAlign='right';
   cx.fillStyle='rgba(255,255,255,0.45)';
   cx.fillText(BUILD,W-14,H-12);
+  cx.textAlign='left';
+  cx.fillStyle='rgba(255,255,255,0.35)';
+  cx.fillText('press R to force-refresh',14,H-12);
+  if(UPDATING){
+    cx.fillStyle='rgba(20,15,40,0.8)';
+    roundRect(W/2-150,H-52,300,30,10);cx.fill();
+    cx.font='bold 14px "Segoe UI",sans-serif';cx.textAlign='center';
+    cx.fillStyle='#a8d84a';
+    cx.fillText('NEW VERSION FOUND — LOADING…',W/2,H-32);
+  }
 }
 function drawCaught(){
   overlay(0.45);
