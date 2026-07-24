@@ -20,6 +20,7 @@
   #btnL{left:4vw;font-size:24px;} #btnR{left:calc(4vw + 80px);font-size:24px;}
   #btnJ{right:4vw;width:84px;height:84px;}
   #btnS{right:calc(4vw + 98px);bottom:3vh;}
+  #btnU{right:calc(4vw + 98px);bottom:calc(3vh + 74px);font-size:22px;}
   @media (pointer:coarse){ #touch{display:block;} }
 </style>
 </head>
@@ -28,6 +29,7 @@
 <div id="touch">
   <div class="tbtn" id="btnL">◀</div>
   <div class="tbtn" id="btnR">▶</div>
+  <div class="tbtn" id="btnU">▲</div>
   <div class="tbtn" id="btnS">STOMP</div>
   <div class="tbtn" id="btnJ">HOP</div>
 </div>
@@ -127,6 +129,53 @@ function toot(small,spicy){
   } else {
     fart(Math.random()<0.65?'rumble':'rip', spicy);
   }
+}
+function grunt(){
+  try{
+    const ac=audio(),t=ac.currentTime;
+    const o=ac.createOscillator(),g=ac.createGain(),f=ac.createBiquadFilter();
+    o.type='sawtooth';
+    o.frequency.setValueAtTime(150,t);
+    o.frequency.exponentialRampToValueAtTime(95,t+0.2);
+    f.type='lowpass';f.frequency.value=800;
+    env(g,t,0.01,0.2,0.13);
+    o.connect(f);f.connect(g);g.connect(MASTER);o.start(t);o.stop(t+0.28);
+  }catch(e){}
+}
+function thump(){
+  try{
+    const ac=audio(),t=ac.currentTime;
+    const o=ac.createOscillator(),g=ac.createGain();
+    o.type='sine';
+    o.frequency.setValueAtTime(190+Math.random()*70,t);
+    o.frequency.exponentialRampToValueAtTime(80,t+0.08);
+    env(g,t,0.004,0.09,0.13);
+    o.connect(g);g.connect(MASTER);o.start(t);o.stop(t+0.14);
+  }catch(e){}
+}
+function boing(){
+  try{
+    const ac=audio(),t=ac.currentTime;
+    const o=ac.createOscillator(),g=ac.createGain();
+    o.type='triangle';
+    o.frequency.setValueAtTime(240,t);
+    o.frequency.exponentialRampToValueAtTime(780,t+0.11);
+    o.frequency.exponentialRampToValueAtTime(430,t+0.26);
+    env(g,t,0.008,0.26,0.16);
+    o.connect(g);g.connect(MASTER);o.start(t);o.stop(t+0.34);
+  }catch(e){}
+}
+function whoosh(){
+  try{
+    const ac=audio(),t=ac.currentTime;
+    const s=ac.createBufferSource();s.buffer=noiseBuf(ac);
+    s.playbackRate.value=1.6;
+    const f=ac.createBiquadFilter();f.type='bandpass';
+    f.frequency.setValueAtTime(500,t);
+    f.frequency.exponentialRampToValueAtTime(1600,t+0.22);f.Q.value=1.2;
+    const g=ac.createGain();env(g,t,0.01,0.22,0.1);
+    s.connect(f);f.connect(g);g.connect(MASTER);s.start(t);s.stop(t+0.3);
+  }catch(e){}
 }
 function blip(){
   try{
@@ -537,6 +586,37 @@ const LEVELS = [
 "###############################      ##########################      ############################      ############################      ##############################       ##########################",
 "###############################      ##########################      ############################      ############################      ##############################       ##########################"
 ]
+},
+{
+"name": "THE FARMER'S GARDEN",
+"sky": [
+"#f0b46a",
+"#f5d3a0",
+"#f2e6cf"
+],
+"hill": "#c9a86a",
+"dirt": "#6b4a30",
+"dirtDark": "#563a25",
+"grass": "#5a8a45",
+"grassLight": "#78a85e",
+"boss": true,
+"clear": "You wriggled free every time! He's given up for good!",
+"rows": [
+"                                                        ",
+"                                                        ",
+"                                                        ",
+"##                           c                        ##",
+"##                           T            c           ##",
+"##       c     T             I            T           ##",
+"##       T     I      T      I      T     I           ##",
+"##       I  T  I   T  I   T  I   T  I  T  I  T        ##",
+"##       I  I  I   I  I   I  I   I  I  I  I  I        ##",
+"##       I  I  I   I  I   I  I   I  I  I  I  I        ##",
+"## cP vv I  I  I vvI  I v I  I vvI  I vI  I vI  X vvc ##",
+"########################################################",
+"########################################################",
+"########################################################"
+]
 }
 ];
 
@@ -561,9 +641,9 @@ let selIdx=0;
    false = normal play, levels unlock as you clear them
    ========================== */
 const UNLOCK_ALL = true;
-const BUILD = 'v6 · windy orchard';   // shown on the title screen so you can tell which upload is live
+const BUILD = 'v11 · struggle free';   // shown on the title screen so you can tell which upload is live
 let maxUnlocked=0, menuChoice=0;   // menuChoice: 0=play, 1=level select
-try{ const s=localStorage.getItem('toottrail_unlocked'); if(s!=null) maxUnlocked=Math.max(0,Math.min(5,parseInt(s)||0)); }catch(e){}
+try{ const s=localStorage.getItem('toottrail_unlocked'); if(s!=null) maxUnlocked=Math.max(0,Math.min(6,parseInt(s)||0)); }catch(e){}
 if(UNLOCK_ALL) maxUnlocked=99;
 function unlock(idx){
   if(UNLOCK_ALL) return;
@@ -579,7 +659,7 @@ const G = {
 let grid=[], ROWS=0, COLS=0, LEVEL_W=0;
 let carrots=[], enemies=[], clouds=[], parts=[], pops=[], spikes=[],
     flag=null, checkpointObjs=[], powerups=[], coinPops=[], bumps=[], floatCoins=[], poops=[],
-    winds=[], windMap={}, leaves=[];
+    winds=[], windMap={}, leaves=[], boss=null, thrown=[];
 const blockHits = {};
 
 const P = {
@@ -598,7 +678,8 @@ function tileAt(tx,ty){
 function setTile(tx,ty,ch){ if(ty>=0&&ty<ROWS&&tx>=0&&tx<COLS) grid[ty][tx]=ch; }
 function solid(ch){ return '#BU?5HCL'.includes(ch)&&ch!==' '; }
 function isSolidAt(px,py){ return solid(tileAt(Math.floor(px/TILE),Math.floor(py/TILE))); }
-function platTop(px,py){ return tileAt(Math.floor(px/TILE),Math.floor(py/TILE))==='='; }
+function platTop(px,py){ const c=tileAt(Math.floor(px/TILE),Math.floor(py/TILE)); return c==='='||c==='T'; }
+function isCornTop(px,py){ return tileAt(Math.floor(px/TILE),Math.floor(py/TILE))==='T'; }
 
 function parseLevel(idx){
   const L=LEVELS[idx];
@@ -608,7 +689,7 @@ function parseLevel(idx){
   grid=L.rows.map(r=>r.padEnd(COLS,' ').split(''));
   carrots=[];enemies=[];clouds=[];parts=[];pops=[];spikes=[];flag=null;
   checkpointObjs=[];powerups=[];coinPops=[];bumps=[];floatCoins=[];poops=[];
-  winds=[];windMap={};leaves=[];
+  winds=[];windMap={};leaves=[];boss=null;thrown=[];
   for(const k in blockHits) delete blockHits[k];
   for(let y=0;y<ROWS;y++)for(let x=0;x<COLS;x++){
     const ch=grid[y][x], px=x*TILE, py=y*TILE;
@@ -623,6 +704,12 @@ function parseLevel(idx){
     else if(ch==='y') enemies.push({kind:'wasp',x:px+3,y:py+4,w:26,h:20,baseX:px+3,baseY:py+4,t:Math.random()*6,
       state:'hover',timer:0,vx:0,vy:0,dir:-1,hp:1,dead:false});
     else if(ch==='>'||ch==='<'){ winds.push({tx:x,ty:y,dir:ch==='>'?1:-1}); }
+    else if(ch==='X'){
+      boss={x:px-14,y:py+TILE-76,w:44,h:76,vx:0,vy:0,face:-1,
+        hp:6,maxHp:6,phase:1,state:'idle',timer:1.2,inv:0,
+        gasp:0,anim:0,walk:0,defeated:0,onG:true,scooped:false,holding:0,
+        bagX:0,bagY:0,homeY:py+TILE-76};
+    }
     else if(ch==='m') enemies.push({kind:'mole',x:px+4,y:py+TILE,w:28,h:30,t:Math.random()*3,up:0,hp:1,dead:false});
     else if(ch==='d') enemies.push({kind:'dust',x:px+6,y:py+TILE-22,w:24,h:22,dir:Math.random()<0.5?-1:1,hopT:Math.random(),vx:0,vy:0,onG:false,hp:1,dead:false,t:Math.random()*6});
     else if(ch==='^'){ spikes.push({x:px,y:py}); clear=false; }
@@ -634,7 +721,7 @@ function parseLevel(idx){
   for(const w of winds) windMap[w.tx+','+w.ty]=w.dir;
 }
 function resetPlayer(){
-  P.vx=0;P.vy=0;P.onGround=false;P.inv=1.5;P.sq=1;P.pound=false;
+  P.vx=0;P.vy=0;P.onGround=false;P.inv=1.5;P.sq=1;P.pound=false;P.climb=false;P.bagged=0;P.struggle=0;P.bagTick=0;
   P.x=G.checkpoint.x;P.y=G.checkpoint.y;
   G.camX=Math.max(0,P.x-W*0.35);
 }
@@ -694,6 +781,7 @@ function bindTouch(id,code,press){
 }
 bindTouch('btnL','ArrowLeft');bindTouch('btnR','ArrowRight');
 bindTouch('btnJ','Space','jump');bindTouch('btnS','ArrowDown','down');
+bindTouch('btnU','ArrowUp','jump');
 cv.addEventListener('pointerdown',()=>{ if(G.state!=='play'&&G.state!=='clear'&&G.state!=='select'&&G.state!=='levelsel'&&G.state!=='victory') menuAction(); });
 function menuAction(){
   audio();
@@ -709,6 +797,8 @@ let levSel=0;
 const left =()=>keys['ArrowLeft']||keys['KeyA'];
 const right=()=>keys['ArrowRight']||keys['KeyD'];
 const jumpHeld=()=>keys['Space']||keys['ArrowUp']||keys['KeyW']||keys['KeyZ'];
+const upHeld  =()=>keys['ArrowUp']||keys['KeyW'];
+const downHeld=()=>keys['ArrowDown']||keys['KeyS'];
 
 /* ---------------- Fart / effects ---------------- */
 function spawnCloud(x,y,big){
@@ -797,18 +887,28 @@ function update(dt){
   G.time+=dt;
   // music follows game state (needs first keypress to unlock audio)
   if(AC){
-    if(G.state==='play'||G.state==='clear'||G.state==='victory'||G.state==='select'||G.state==='levelsel') startMusic();
+    if(G.state==='play'||G.state==='clear'||G.state==='victory'||G.state==='caught'||G.state==='select'||G.state==='levelsel') startMusic();
     else stopMusic();
   }
   if(G.hitstop>0){ G.hitstop-=dt; return; }
   if(G.shake>0) G.shake=Math.max(0,G.shake-dt*3);
 
+  if(G.state==='caught'){
+    G.caughtT-=dt;
+    if(boss){ boss.walk+=dt*3; boss.x+=boss.face*-24*dt; }
+    for(const p of parts){ p.life-=dt; p.x+=p.vx*dt; p.y+=p.vy*dt;
+      if(p.gas){p.vy-=60*dt;p.vx*=0.98;}else p.vy+=500*dt; }
+    parts=parts.filter(p=>p.life>0);
+    if(G.caughtT<=0) G.state='dead';
+    jumpPressed=false;downPressed=false;
+    return;
+  }
   if(G.state==='victory'){
     G.victoryT-=dt;
     // happy little hops in place at the flag
     P.vy+=1650*dt;
     P.y+=P.vy*dt;
-    const groundY=flag.y-P.h;
+    const groundY=(flag? flag.y : Math.floor((P.y+P.h)/TILE)*TILE)-P.h;
     if(P.y>=groundY){ P.y=groundY; P.vy=-320; P.sq=1.25; }
     P.sq+=(1-P.sq)*Math.min(1,dt*10);
     // keep particles/pops alive
@@ -833,6 +933,104 @@ function update(dt){
 
   /* --- player --- */
   const ACC=1400, MAXV=G.bunny.speed, FRIC=1600, GRAV=1650*(G.bunny.floatMul||1), JUMP=G.bunny.jump;
+
+  // --- STUFFED IN THE SACK: mash to wriggle free before he squeezes you out ---
+  if(P.bagged>0){
+    if(boss){ P.x=boss.bagX+8; P.y=boss.bagY+6; boss.holding=1; }
+    P.vx=0; P.vy=0;
+
+    // mashing jump fills the escape meter; it slips back if you stop
+    if(jumpPressed){
+      P.struggle=Math.min(1,(P.struggle||0)+0.17);
+      thump();
+      G.shake=Math.max(G.shake,0.18);
+      for(let i=0;i<5;i++)parts.push({x:P.x+P.w/2+(Math.random()-.5)*22,y:P.y+8,
+        vx:(Math.random()-.5)*150,vy:-40-Math.random()*80,life:0.35,r:2.5,col:'#e8dcc0',gas:false});
+      if(P.struggle>=1){          // free! check before any decay
+        jumpPressed=false;
+        burstOutOfBag();
+        return;
+      }
+    }
+    P.struggle=Math.max(0,(P.struggle||0)-dt*0.12);
+    jumpPressed=false; downPressed=false;
+
+    // the sack squeezes: a heart every so often while you're stuck
+    P.bagTick-=dt;
+    if(P.bagTick<=0){
+      P.bagTick=1.25;
+      P.hp--; hurtSnd(); G.shake=0.45;
+      scorePop(P.x+P.w/2,P.y-6,'-1','#ff5a7a');
+      if(P.hp<=0){
+        P.hp=0; P.bagged=0;
+        G.state='caught'; G.caughtT=2.6;
+        G.best=Math.max(G.best,G.score);
+        if(boss) boss.holding=0;
+        return;
+      }
+    }
+
+    // keep the world ticking around the struggling bunny
+    if(boss) updateBoss(dt);
+    for(const cl of clouds){ cl.life-=dt; cl.y-=14*dt; }
+    clouds=clouds.filter(c=>c.life>0);
+    for(const p of parts){ p.life-=dt; p.x+=p.vx*dt; p.y+=p.vy*dt;
+      if(p.gas){p.vy-=60*dt;p.vx*=0.98;} else p.vy+=500*dt; }
+    parts=parts.filter(p=>p.life>0);
+    for(const s of pops){ s.life-=dt; s.y-=40*dt; }
+    pops=pops.filter(s=>s.life>0);
+    const targ=Math.max(0,Math.min(LEVEL_W-W,P.x-W*0.38));
+    G.camX+=(targ-G.camX)*Math.min(1,dt*6);
+    return;
+  }
+
+  // --- CLIMBING corn stalks ---
+  const stalkAt=(px,py)=>{ const c=tileAt(Math.floor(px/TILE),Math.floor(py/TILE)); return c==='I'||c==='T'; };
+  const cxp=P.x+P.w/2;
+  const onStalk = stalkAt(cxp,P.y+8) || stalkAt(cxp,P.y+P.h*0.5) || stalkAt(cxp,P.y+P.h-6);
+  if(!onStalk) P.climb=false;
+  else if(!P.climb && !P.pound && (upHeld()||downHeld())) P.climb=true;
+
+  if(P.climb){
+    const stx=Math.floor(cxp/TILE);
+    const target=stx*TILE+TILE/2-P.w/2;
+    P.x+=(target-P.x)*Math.min(1,dt*12);   // hug the stalk
+    P.vx=0; P.vy=0;
+    let cdir=0;
+    if(upHeld()) cdir=-1; else if(downHeld()) cdir=1;
+    // stepping sideways lets go of the stalk
+    if(cdir===0 && (left()||right())){
+      P.climb=false;
+      P.vx=(right()?1:-1)*MAXV*0.5;
+    }
+    P.y+=cdir*135*dt;
+    P.climbAnim=(P.climbAnim||0)+Math.abs(cdir)*dt*7;
+    P.canBoost=true;
+    // don't sink through the ground while climbing down
+    if(isSolidAt(P.x+4,P.y+P.h)||isSolidAt(P.x+P.w-4,P.y+P.h)){
+      P.y=Math.floor((P.y+P.h)/TILE)*TILE-P.h-0.01;
+      if(cdir>0) P.climb=false;
+    }
+    if(P.y<0) P.y=0;
+    // hop off the stalk
+    if(jumpPressed){
+      P.climb=false;
+      P.vy=-JUMP*0.92;
+      const away = left()? -1 : right()? 1 : 0;
+      P.vx=away*MAXV*0.9;
+      P.sq=1.3;
+      spawnCloud(P.x+P.w/2,P.y+P.h-2,false);
+      toot(true,P.chili>0);
+    }
+    jumpPressed=false;
+    P.inv=Math.max(0,P.inv-dt);
+    P.chili=Math.max(0,P.chili-dt);
+    P.star=Math.max(0,P.star-dt);
+    P.earWob+=dt*3;
+    P.sq+=(1-P.sq)*Math.min(1,dt*10);
+  }
+
+  if(!P.climb){
   if(!P.pound){
     if(left()){ if(P.vx>-MAXV)P.vx-=ACC*dt; P.face=-1; }
     else if(right()){ if(P.vx<MAXV)P.vx+=ACC*dt; P.face=1; }
@@ -895,6 +1093,7 @@ function update(dt){
   P.chili=Math.max(0,P.chili-dt);
   P.star=Math.max(0,P.star-dt);
   P.earWob+=dt*(Math.abs(P.vx)>10?12:4);
+  }   // end !P.climb
 
   if(P.star>0 && Math.random()<dt*30)
     parts.push({x:P.x+Math.random()*P.w,y:P.y+Math.random()*P.h,vx:(Math.random()-.5)*40,vy:-60,
@@ -1104,6 +1303,8 @@ function update(dt){
   }
   poops=poops.filter(q=>q.splat>=0 && q.t<9);
 
+  if(boss) updateBoss(dt);
+
   /* --- spikes --- */
   if(P.inv<=0&&P.star<=0)for(const s of spikes){
     if(P.x<s.x+TILE&&P.x+P.w>s.x&&P.y+P.h>s.y+TILE*0.45&&P.y<s.y+TILE) damage(false);
@@ -1166,9 +1367,16 @@ function moveY(dt){
     if(solidHit||platHit){
       P.y=Math.floor(b/TILE)*TILE-P.h-0.01;
       const wasPound=P.pound, impact=P.vy;
+      const springy = !P.climb && (isCornTop(P.x+3,b)||isCornTop(P.x+P.w-3,b));
       if(P.vy>350) P.sq=0.65;
       P.vy=0;P.onGround=true;P.coyote=0.1;P.canBoost=true;
       if(wasPound) landPound();
+      else if(springy){          // corn leaves fling you back up
+        P.vy=-620; P.onGround=false; P.sq=1.45; P.canBoost=true;
+        boing();
+        for(let i=0;i<7;i++)parts.push({x:P.x+P.w/2+(Math.random()-.5)*24,y:P.y+P.h,
+          vx:(Math.random()-.5)*120,vy:-40-Math.random()*60,life:0.4,r:3,col:'#7cc44a',gas:false});
+      }
       else if(impact>430) thud();
     }
   } else if(P.vy<0){
@@ -1219,6 +1427,158 @@ function landPound(){
   if(broke){ P.vy=120; P.onGround=false; } // fall through the hole you made
 }
 
+function updateBoss(dt){
+  if(!boss) return;
+  const B=boss;
+  B.anim+=dt;
+  B.inv=Math.max(0,B.inv-dt);
+
+  if(B.defeated>0){          // gives up and trudges away
+    B.defeated-=dt;
+    B.x+=B.face*-46*dt;
+    B.walk+=dt*6;
+    B.y=B.homeY;
+    if(Math.random()<dt*8)
+      parts.push({x:B.x+B.w/2+(Math.random()-.5)*30,y:B.y+12,vx:(Math.random()-.5)*40,
+        vy:-30-Math.random()*40,life:0.5,r:3,col:'#cfd8e0',gas:true});
+    if(B.defeated<=0 && G.state==='play'){
+      G.state='victory'; G.victoryT=1.7;
+      G.cheer=(G.bunny&&G.bunny.cheer)||"Woohoo!";
+      P.vx=0;
+    }
+    return;
+  }
+
+  const pcx=P.x+P.w/2, bcx=B.x+B.w/2;
+  const phase=B.phase;
+
+  if(B.holding>0){          // gloating with the bunny in the sack
+    B.holding-=dt; B.vx=0;
+    if(B.y<B.homeY){ B.vy+=1150*dt; B.y=Math.min(B.homeY,B.y+B.vy*dt); }
+    else { B.y=B.homeY; B.vy=0; B.onG=true; }
+    B.state='land'; B.timer=0.3;
+    B.bagX=B.x+B.w/2+B.face*22-16; B.bagY=B.y+B.h*0.42;
+    return;
+  }
+  if(B.gasp>0){              // recoiling from a fart cloud — free breathing room
+    B.gasp-=dt; B.vx=0;
+    if(B.onG) B.walk+=dt*2;
+    if(B.gasp<=0){ B.state='idle'; B.timer=0.5; }
+  }
+  else if(B.state==='idle'){
+    B.vx=0; B.timer-=dt;
+    B.face = pcx<bcx? -1:1;
+    if(B.timer<=0){ B.state='crouch'; B.timer= phase>=3? 0.32 : phase===2? 0.42 : 0.55; B.scooped=false; }
+  }
+  else if(B.state==='crouch'){    // telegraph: he squats, bag open
+    B.vx=0; B.timer-=dt;
+    B.face = pcx<bcx? -1:1;
+    if(B.timer<=0){
+      // leap toward wherever the bunny is
+      const dx=pcx-bcx;
+      const reach=(phase>=3?1.15:phase===2?1.0:0.85);
+      B.vx=Math.max(-330,Math.min(330,dx*1.35*reach));
+      B.vy=-(430+ (phase>=3?110: phase===2?60:0));
+      B.onG=false; B.state='leap';
+      B.scooped=false;
+      grunt();
+    }
+  }
+  else if(B.state==='leap'){
+    // arc through the air with the bag out front
+    B.vy+=1150*dt;
+    B.x+=B.vx*dt; B.y+=B.vy*dt;
+    if(B.y>=B.homeY && B.vy>0){
+      B.y=B.homeY; B.vy=0; B.onG=true;
+      B.state='land'; B.timer= phase>=3? 0.45 : 0.7;
+      thud(); G.shake=Math.max(G.shake,0.35);
+      for(let i=0;i<9;i++)parts.push({x:B.x+B.w/2+(Math.random()-.5)*36,y:B.y+B.h,
+        vx:(Math.random()-.5)*160,vy:-30-Math.random()*60,life:0.35,r:3,col:'#d8c9a8',gas:false});
+    }
+  }
+  else if(B.state==='land'){      // hauling himself back up — vulnerable
+    B.vx=0; B.timer-=dt;
+    if(B.timer<=0){ B.state='idle'; B.timer= phase>=3? 0.25:0.5; }
+  }
+
+  // keep him inside the garden walls
+  if(isSolidAt(B.x,B.y+B.h*0.6)) B.x=(Math.floor(B.x/TILE)+1)*TILE+0.01;
+  if(isSolidAt(B.x+B.w,B.y+B.h*0.6)) B.x=Math.floor((B.x+B.w)/TILE)*TILE-B.w-0.01;
+  B.x=Math.max(TILE,Math.min(LEVEL_W-TILE-B.w,B.x));
+
+  // --- THE BAG: scooping the bunny costs a heart, then it wriggles free ---
+  const bagOut=(B.state==='leap'||B.state==='crouch'||B.state==='land');
+  const bagX=B.x+B.w/2+B.face*22-16, bagY=B.y+B.h*0.42;
+  B.bagX=bagX; B.bagY=bagY;
+  if(bagOut && !B.scooped && P.inv<=0 && P.star<=0 && B.defeated<=0){
+    if(P.x<bagX+34 && P.x+P.w>bagX && P.y<bagY+38 && P.y+P.h>bagY){
+      B.scooped=true;
+      caught();
+    }
+  }
+
+  // gas is the only thing that wears down his patience
+  for(const cl of clouds){
+    if(cl.bossHit) continue;
+    if(Math.abs(cl.x-(B.x+B.w/2))<cl.r+24 && Math.abs(cl.y-(B.y+B.h*0.5))<cl.r+36){
+      cl.bossHit=true;
+      hurtBoss(1,'gas');
+    }
+  }
+}
+
+function caught(){
+  // scooped into the sack — now you have to struggle out
+  const B=boss;
+  hurtSnd(); G.shake=0.5; G.hitstop=0.06;
+  scorePop(B.x+B.w/2,B.y-16,'GOTCHA!','#ff5a7a');
+  P.bagged=1;                 // trapped until you mash free
+  P.struggle=0;               // escape meter, 0..1
+  P.bagTick=1.1;              // grace before the first squeeze
+  P.vx=0; P.vy=0; P.climb=false; P.pound=false;
+  B.holding=1;                // farmer stands and gloats while he's got you
+}
+function burstOutOfBag(){
+  const B=boss;
+  const bx=(B?B.bagX:P.x)+16, by=(B?B.bagY:P.y)-6;
+  P.bagged=0; P.struggle=0;
+  P.x=bx-P.w/2; P.y=by-P.h;
+  P.vx=(B? -B.face:1)*250; P.vy=-520;
+  P.inv=2.0; P.onGround=false; P.canBoost=true; P.sq=1.5;
+  boing();
+  scorePop(P.x+P.w/2,P.y-10,'WRIGGLED FREE!','#a8d84a');
+  for(let i=0;i<18;i++)parts.push({x:bx,y:by,
+    vx:(Math.random()-.5)*300,vy:-Math.random()*300,life:0.6,r:3,
+    col: Math.random()<0.5?'#e8dcc0':'#c8b48c',gas:false});
+  if(B) B.holding=0;
+}
+function hurtBoss(amt,how){
+  const B=boss;
+  if(!B||B.inv>0||B.defeated>0) return;
+  B.hp-=amt; B.inv=0.7; B.gasp=1.1;
+  if(B.state==='leap'){ B.state='land'; B.timer=0.5; B.y=B.homeY; B.vy=0; B.onG=true; }
+  G.hitstop=0.05; G.shake=Math.max(G.shake,0.4);
+  squish();
+  scorePop(B.x+B.w/2,B.y-10,'PEE-EW!','#a8d84a');
+  for(let i=0;i<14;i++)parts.push({x:B.x+B.w/2,y:B.y+B.h*0.4,
+    vx:(Math.random()-.5)*240,vy:-Math.random()*220,life:0.5,r:3,col:'#a8d84a',gas:false});
+
+  if(B.hp<=0){
+    B.hp=0; B.defeated=3.2; B.state='done'; B.gasp=0;
+    G.score+=3000; fanfare();
+    scorePop(B.x+B.w/2,B.y-28,'HE GIVES UP! +3000','#ffd93d');
+    for(let i=0;i<12;i++)
+      parts.push({x:B.x+B.w/2,y:B.y+10,vx:(Math.random()-.5)*300,vy:-200-Math.random()*180,
+        life:1.0,r:4,col:'#ff8c42',gas:false});
+  } else {
+    const np = B.hp>4?1: B.hp>2?2:3;
+    if(np!==B.phase){
+      B.phase=np; B.state='idle'; B.timer=0.8; B.gasp=0.9;
+      scorePop(B.x+B.w/2,B.y-34,'HE\'S DETERMINED!','#ff8c42');
+      G.shake=0.6;
+    }
+  }
+}
 function hitEnemy(e,dmg,how){
   e.hp-=dmg;
   G.hitstop=0.04;
@@ -1269,6 +1629,7 @@ function draw(){
   drawFloatCoins();
   drawPowerups();
   drawEnemies();
+  drawBoss();
   drawPoops();
   drawCoinPops();
   drawClouds();
@@ -1279,9 +1640,12 @@ function draw(){
   cx.restore();
 
   drawHUD(L);
+  if(boss && G.state!=='title') drawBossBar();
+  if(P.bagged>0) drawStruggle();
   if(G.state==='title') drawTitle();
   if(G.state==='select') drawSelect();
   if(G.state==='levelsel') drawLevelSel();
+  if(G.state==='caught') drawCaught();
   if(G.state==='dead') drawDead();
   if(G.state==='win') drawWin();
   if(G.state==='clear') drawClear();
@@ -1577,6 +1941,61 @@ function drawTiles(L){
       cx.strokeStyle='#5c4530';cx.lineWidth=2;cx.strokeRect(px+1,py+1,TILE-2,TILE-2);
       cx.fillStyle='#5c4530';
       [[4,4],[TILE-8,4],[4,TILE-8],[TILE-8,TILE-8]].forEach(([qx,qy])=>cx.fillRect(px+qx,py+qy,4,4));
+    }
+    else if(ch==='I'){   // corn stalk body
+      cx.strokeStyle='#5c9a3a';cx.lineWidth=5;
+      cx.beginPath();cx.moveTo(px+TILE/2,py);cx.lineTo(px+TILE/2,py+TILE);cx.stroke();
+      const sway=Math.sin(G.time*1.6+tx)*3;
+      cx.fillStyle='#6fb345';
+      cx.beginPath();
+      cx.moveTo(px+TILE/2,py+8);
+      cx.quadraticCurveTo(px+TILE/2-16+sway,py+6,px+TILE/2-19+sway,py+18);
+      cx.quadraticCurveTo(px+TILE/2-10,py+14,px+TILE/2,py+15);cx.fill();
+      cx.beginPath();
+      cx.moveTo(px+TILE/2,py+20);
+      cx.quadraticCurveTo(px+TILE/2+16-sway,py+18,px+TILE/2+19-sway,py+30);
+      cx.quadraticCurveTo(px+TILE/2+10,py+26,px+TILE/2,py+27);cx.fill();
+      // an ear of corn here and there
+      if((tx*7+ty*3)%5===0){
+        cx.fillStyle='#e8c04a';
+        cx.beginPath();cx.ellipse(px+TILE/2+7,py+20,4.5,8,0.25,0,7);cx.fill();
+        cx.fillStyle='#7cc44a';
+        cx.beginPath();cx.ellipse(px+TILE/2+5,py+14,2.5,6,0.25,0,7);cx.fill();
+      }
+    }
+    else if(ch==='T'){   // springy leafy top
+      const sway=Math.sin(G.time*2+tx)*3;
+      cx.strokeStyle='#5c9a3a';cx.lineWidth=5;
+      cx.beginPath();cx.moveTo(px+TILE/2,py+16);cx.lineTo(px+TILE/2,py+TILE);cx.stroke();
+      cx.fillStyle='#7cc44a';
+      for(const [ex,ey,rot] of [[-20,4,-0.5],[20,4,0.5],[-13,-6,-1.0],[13,-6,1.0],[0,-11,0]]){
+        cx.save();
+        cx.translate(px+TILE/2+ex*0.85+sway*0.4, py+16+ey);
+        cx.rotate(rot+sway*0.02);
+        cx.beginPath();cx.ellipse(0,0,12,4.5,0,0,7);cx.fill();
+        cx.restore();
+      }
+      // tassel
+      cx.strokeStyle='#e0c46a';cx.lineWidth=2;
+      cx.beginPath();
+      cx.moveTo(px+TILE/2,py+6);cx.lineTo(px+TILE/2-4+sway,py-2);
+      cx.moveTo(px+TILE/2,py+6);cx.lineTo(px+TILE/2+4+sway,py-1);
+      cx.stroke();
+    }
+    else if(ch==='v'){   // leafy garden veg
+      const sway=Math.sin(G.time*1.4+tx*0.7)*2;
+      cx.fillStyle='#4f8a3c';
+      for(const [ex,rot] of [[-9,-0.7],[9,0.7],[0,0]]){
+        cx.save();
+        cx.translate(px+TILE/2+ex+sway*0.3, py+TILE-8);
+        cx.rotate(rot);
+        cx.beginPath();cx.ellipse(0,0,8,5,0,0,7);cx.fill();
+        cx.restore();
+      }
+      cx.fillStyle='#6aab52';
+      cx.beginPath();cx.arc(px+TILE/2,py+TILE-12,7,0,7);cx.fill();
+      cx.fillStyle='#7cc44a';
+      cx.beginPath();cx.arc(px+TILE/2-2,py+TILE-14,3.5,0,7);cx.fill();
     }
     else if(ch==='='){
       cx.fillStyle='#b5854f';cx.fillRect(px,py+4,TILE,14);
@@ -1925,6 +2344,221 @@ function drawLeaves(L){
   }
   cx.globalAlpha=1;
 }
+function drawBoss(){
+  if(!boss) return;
+  const B=boss;
+  if(B.inv>0 && Math.floor(G.time*18)%2===0 && B.defeated<=0) return;
+  const airborne=(B.state==='leap');
+  const crouching=(B.state==='crouch'||B.state==='land');
+
+  cx.save();
+  cx.translate(B.x+B.w/2, B.y+B.h);
+  cx.scale(B.face,1);
+  if(B.gasp>0) cx.rotate(Math.sin(G.time*20)*0.05);
+  const squash = crouching? 0.86 : airborne? 1.08 : 1;
+  cx.scale(1/squash, squash);
+  const bob = (B.defeated>0)? Math.abs(Math.sin(B.walk))*3 : 0;
+  cx.translate(0,-bob);
+
+  // --- the sack, held out front ---
+  const bagOpen=(B.state==='leap'||B.state==='crouch'||B.state==='land');
+  const hasBunny=(P.bagged>0);
+  cx.save();
+  cx.translate(20, -34 + (crouching?4:0));
+  cx.rotate(airborne? -0.25 : crouching? 0.15 : 0.05);
+  if(hasBunny){
+    // stuffed and squirming — the sack bulges and jiggles
+    const fight=1+(P.struggle||0)*1.6;
+    const wig=Math.sin(G.time*26)*4*fight, wig2=Math.cos(G.time*19)*3*fight;
+    cx.save();
+    cx.translate(wig*0.35,0);
+    cx.fillStyle='#c8b48c';
+    cx.beginPath();
+    cx.moveTo(-14,-14);
+    cx.quadraticCurveTo(-24+wig,6, -12+wig2,26);
+    cx.quadraticCurveTo(6,34, 22-wig2,24);
+    cx.quadraticCurveTo(32-wig,4, 20,-13);
+    cx.quadraticCurveTo(4,-20,-14,-14);
+    cx.fill();
+    // cinched neck
+    cx.fillStyle='#b3a07c';
+    cx.beginPath();cx.ellipse(3,-13,12,4.5,0,0,7);cx.fill();
+    // an ear poking out of the top
+    cx.save();
+    cx.translate(2,-16); cx.rotate(-0.4+Math.sin(G.time*22)*0.35);
+    cx.fillStyle=G.bunny.head;
+    cx.beginPath();cx.ellipse(0,-7,3.4,9,0,0,7);cx.fill();
+    cx.fillStyle='#f0b9c8';
+    cx.beginPath();cx.ellipse(0,-6,1.7,5.5,0,0,7);cx.fill();
+    cx.restore();
+    // struggle lines
+    cx.strokeStyle='rgba(90,70,45,0.5)';cx.lineWidth=2;
+    cx.beginPath();
+    cx.moveTo(-8+wig2,6);cx.lineTo(-2+wig2,10);
+    cx.moveTo(14-wig2,4);cx.lineTo(8-wig2,9);
+    cx.stroke();
+    cx.restore();
+  } else {
+  cx.fillStyle='#c8b48c';
+  cx.beginPath();
+  if(bagOpen){   // mouth wide open, ready to scoop
+    cx.moveTo(-13,-16); cx.quadraticCurveTo(-20,10,-6,22);
+    cx.quadraticCurveTo(8,28,18,20); cx.quadraticCurveTo(26,8,20,-14);
+    cx.quadraticCurveTo(4,-22,-13,-16);
+  } else {       // slack, hanging
+    cx.moveTo(-8,-12); cx.quadraticCurveTo(-14,8,-4,18);
+    cx.quadraticCurveTo(6,24,14,16); cx.quadraticCurveTo(20,6,14,-11);
+    cx.quadraticCurveTo(2,-16,-8,-12);
+  }
+  cx.fill();
+  cx.fillStyle='#b3a07c';
+  cx.beginPath();cx.ellipse(3,bagOpen?-15:-11, bagOpen?17:11, bagOpen?6:4,0,0,7);cx.fill();
+  if(bagOpen){
+    cx.fillStyle='rgba(90,70,45,0.55)';
+    cx.beginPath();cx.ellipse(3,-14,13,4.5,0,0,7);cx.fill();
+  }
+  cx.strokeStyle='#8a7a58';cx.lineWidth=2;
+  cx.beginPath();cx.moveTo(-6,4);cx.lineTo(12,6);cx.stroke();
+  }
+  cx.restore();
+
+  // legs (overalls) — tucked when airborne
+  cx.fillStyle='#3f6ea8';
+  if(airborne){
+    roundRect(-14,-30,12,22,5);cx.fill();
+    roundRect(2,-32,12,22,5);cx.fill();
+    cx.fillStyle='#4a3a2c';
+    cx.beginPath();cx.ellipse(-8,-8,9,5,0.3,0,7);cx.fill();
+    cx.beginPath();cx.ellipse(9,-10,9,5,0.3,0,7);cx.fill();
+  } else {
+    const stride = crouching? 0 : Math.sin(B.walk)*4;
+    roundRect(-14+stride,-34,12,34,5);cx.fill();
+    roundRect(2-stride,-34,12,34,5);cx.fill();
+    cx.fillStyle='#4a3a2c';
+    cx.beginPath();cx.ellipse(-8+stride,-2,9,5,0,0,7);cx.fill();
+    cx.beginPath();cx.ellipse(9-stride,-2,9,5,0,0,7);cx.fill();
+  }
+
+  // torso: plaid shirt + overall bib
+  cx.fillStyle='#c4483c';
+  roundRect(-17,-64,34,32,7);cx.fill();
+  cx.fillStyle='rgba(255,255,255,0.16)';
+  cx.fillRect(-17,-56,34,2);cx.fillRect(-17,-46,34,2);
+  cx.fillRect(-8,-64,2,32);cx.fillRect(5,-64,2,32);
+  cx.fillStyle='#3f6ea8';
+  roundRect(-12,-54,24,22,3);cx.fill();
+  cx.fillStyle='#345d8f';
+  cx.fillRect(-12,-60,4,8);cx.fillRect(8,-60,4,8);
+
+  // arms — both forward when scooping
+  cx.fillStyle='#c4483c';
+  if(bagOpen){
+    roundRect(4,-58,20,9,4);cx.fill();
+    roundRect(2,-48,20,9,4);cx.fill();
+  } else {
+    roundRect(-24,-60,9,20,4);cx.fill();
+    roundRect(6,-58,18,9,4);cx.fill();
+  }
+  cx.fillStyle='#e8b98f';
+  cx.beginPath();cx.arc(bagOpen?24:-20, bagOpen?-52:-38, 5,0,7);cx.fill();
+  cx.beginPath();cx.arc(bagOpen?22:24, bagOpen?-42:-52, 5,0,7);cx.fill();
+
+  // head
+  cx.fillStyle='#e8b98f';
+  cx.beginPath();cx.arc(2,-74,11.5,0,7);cx.fill();
+  cx.fillStyle='#d8d4cc';
+  cx.beginPath();cx.arc(3,-68,8.5,0,Math.PI);cx.fill();
+  // straw hat
+  cx.fillStyle='#e0b860';
+  cx.beginPath();cx.ellipse(2,-83,21,5.5,0,0,7);cx.fill();
+  cx.beginPath();cx.ellipse(3,-88,11.5,8.5,0,Math.PI,0);cx.fill();
+  cx.fillStyle='#c49a45';
+  cx.fillRect(-8,-85,22,3);
+  // face
+  if(B.gasp>0){            // reeling from the smell
+    cx.strokeStyle='#4a3828';cx.lineWidth=2;
+    cx.beginPath();
+    cx.moveTo(-4,-76);cx.lineTo(2,-74); cx.moveTo(11,-76);cx.lineTo(5,-74);
+    cx.stroke();
+    cx.fillStyle='#4a3828';
+    cx.beginPath();cx.arc(-1,-73,1.4,0,7);cx.arc(7,-73,1.4,0,7);cx.fill();
+    cx.fillStyle='#7a3a30';
+    cx.beginPath();cx.ellipse(4,-66,4.5,3.4,0,0,7);cx.fill();
+    // stink lines
+    cx.strokeStyle='rgba(168,216,74,0.85)';cx.lineWidth=2;
+    for(let i=0;i<3;i++){
+      const wob=Math.sin(G.time*11+i)*3;
+      cx.beginPath();
+      cx.moveTo(-16+i*6,-92);
+      cx.quadraticCurveTo(-14+i*6+wob,-99,-16+i*6,-105);
+      cx.stroke();
+    }
+  } else {
+    cx.fillStyle='#4a3828';
+    cx.beginPath();cx.arc(-1,-74,1.9,0,7);cx.arc(7,-74,1.9,0,7);cx.fill();
+    cx.strokeStyle='#4a3828';cx.lineWidth=2;
+    cx.beginPath();
+    cx.moveTo(-4,-79);cx.lineTo(1,-77);
+    cx.moveTo(11,-79);cx.lineTo(6,-77);
+    cx.stroke();
+    if(B.state==='land'||B.defeated>0){
+      cx.fillStyle='#7a3a30';
+      cx.beginPath();cx.ellipse(4,-67,3.5,2.6,0,0,7);cx.fill();
+    }
+  }
+  cx.restore();
+
+  // telegraph before the leap
+  if(B.state==='crouch'){
+    cx.font='bold 26px "Segoe UI",sans-serif';cx.textAlign='center';
+    cx.strokeStyle='rgba(0,0,0,0.5)';cx.lineWidth=4;
+    cx.strokeText('!',B.x+B.w/2,B.y-14);
+    cx.fillStyle='#ff5a5a';cx.fillText('!',B.x+B.w/2,B.y-14);
+  }
+}
+function drawStruggle(){
+  const bw=340, bx=(W-bw)/2, by=H*0.62;
+  // prompt
+  const pulse=0.75+Math.abs(Math.sin(G.time*9))*0.25;
+  cx.save();
+  cx.globalAlpha=pulse;
+  cx.font='900 30px "Segoe UI",sans-serif';cx.textAlign='center';
+  cx.strokeStyle='rgba(0,0,0,0.6)';cx.lineWidth=5;
+  cx.strokeText('MASH JUMP TO ESCAPE!',W/2,by-18);
+  cx.fillStyle='#ffd93d';cx.fillText('MASH JUMP TO ESCAPE!',W/2,by-18);
+  cx.restore();
+  // meter
+  cx.fillStyle='rgba(20,15,40,0.65)';
+  roundRect(bx-6,by-6,bw+12,30,10);cx.fill();
+  cx.fillStyle='rgba(255,255,255,0.15)';
+  roundRect(bx,by,bw,18,8);cx.fill();
+  const f=Math.max(0,Math.min(1,P.struggle||0));
+  cx.fillStyle= f>0.7? '#a8d84a' : f>0.35? '#ffd93d' : '#ff8c42';
+  roundRect(bx,by,bw*f,18,8);cx.fill();
+  cx.font='bold 12px "Segoe UI",sans-serif';cx.textAlign='center';
+  cx.fillStyle='#fff';
+  cx.fillText('WRIGGLE!',W/2,by+13);
+}
+function drawBossBar(){
+  if(!boss) return;
+  const B=boss;
+  const bw=420, bx=(W-bw)/2, by=76;
+  cx.fillStyle='rgba(20,15,40,0.6)';
+  roundRect(bx-6,by-6,bw+12,30,10);cx.fill();
+  cx.fillStyle='rgba(255,255,255,0.14)';
+  roundRect(bx,by,bw,18,8);cx.fill();
+  const frac=Math.max(0,B.hp/B.maxHp);
+  cx.fillStyle= B.phase>=3? '#ff5a5a' : B.phase===2? '#ffa53d' : '#a8d84a';
+  roundRect(bx,by,bw*frac,18,8);cx.fill();
+  // phase ticks
+  cx.strokeStyle='rgba(0,0,0,0.35)';cx.lineWidth=2;
+  for(const f of [1/3,2/3]){
+    cx.beginPath();cx.moveTo(bx+bw*f,by);cx.lineTo(bx+bw*f,by+18);cx.stroke();
+  }
+  cx.font='bold 12px "Segoe UI",sans-serif';cx.textAlign='center';
+  cx.fillStyle='#fff';
+  cx.fillText(B.defeated>0? 'THE FARMER GIVES UP!' : "FARMER McGRUMP'S PATIENCE",W/2,by+13);
+}
 function drawClouds(){
   for(const cl of clouds){
     const a=cl.life/cl.max;
@@ -1975,7 +2609,8 @@ function drawBunny(pal,wob,run,chiliNose){
   cx.beginPath();cx.ellipse(6-run,-2,6,3.5,0,0,7);cx.fill();
 }
 function drawPlayer(){
-  if(G.state==='dead')return;
+  if(G.state==='dead'||G.state==='caught')return;
+  if(P.bagged>0)return;   // hidden inside the sack
   if(P.inv>0 && P.star<=0 && Math.floor(G.time*14)%2===0) return;
   const px=P.x+P.w/2, py=P.y+P.h;
   cx.save();
@@ -1988,8 +2623,15 @@ function drawPlayer(){
     cx.shadowBlur=14;
   }
   const wob=Math.sin(P.earWob)*0.15;
-  const run = P.onGround&&Math.abs(P.vx)>10 ? Math.sin(G.time*18)*3 : 0;
+  const run = P.climb? Math.sin(P.climbAnim||0)*4
+            : (P.onGround&&Math.abs(P.vx)>10 ? Math.sin(G.time*18)*3 : 0);
   drawBunny(G.bunny,wob,run,P.chili>0);
+  if(P.climb){   // little paws gripping the stalk
+    cx.fillStyle=G.bunny.head;
+    const g1=Math.sin(P.climbAnim||0)*3, g2=-g1;
+    cx.beginPath();cx.arc(6,-30+g1,4,0,7);cx.fill();
+    cx.beginPath();cx.arc(6,-18+g2,4,0,7);cx.fill();
+  }
   cx.restore();
 }
 
@@ -2012,6 +2654,11 @@ function drawPops(){
   cx.globalAlpha=1;
 }
 function drawFlag(){
+  if(boss){   // no flag in the arena — Darci cheers from the fence instead
+    const dx=(LEVEL_W-TILE*2.2), dy=11*TILE;
+    drawDarci(dx,dy,0.6,G.time);
+    return;
+  }
   if(!flag)return;
   const fx=flag.x, fy=flag.y;
   // Darci cheering beside the flag
@@ -2096,13 +2743,14 @@ function drawTitle(){
   overlay(0.45);
   const bob=Math.sin(G.time*2)*6;
   bigText('TOOT TRAIL',H*0.24+bob,64,'#a8d84a');
-  bigText('a gassy bunny adventure · 6 levels',H*0.24+40+bob,20,'#ffd9a0');
+  bigText('a gassy bunny adventure · 7 levels',H*0.24+40+bob,20,'#ffd9a0');
   cx.font='15px "Segoe UI",sans-serif';cx.fillStyle='#fff';cx.textAlign='center';
   const lines=[
     '← → / A D  move      SPACE / ↑  hop (every hop toots — for free!)',
     'SPACE mid-air · DOUBLE JUMP fart-boost, blasts enemies (hold a way to fly further)',
     '↓ / S mid-air · BUNNY STOMP — shockwave, breaks bricks',
     'Jump on critters to squish them safely. Carrots heal hearts!',
+    '↑ / W on a corn stalk · CLIMB up and down (space hops off)',
     'Bonk ? blocks for coins & power-ups. 20 coins = extra heart.',
     'M mutes · sound & music start after your first key press',
   ];
@@ -2111,6 +2759,12 @@ function drawTitle(){
   cx.font='11px "Segoe UI",sans-serif';cx.textAlign='right';
   cx.fillStyle='rgba(255,255,255,0.45)';
   cx.fillText(BUILD,W-14,H-12);
+}
+function drawCaught(){
+  overlay(0.45);
+  bigText('THE FARMER GOT YOU!',H*0.36,44,'#ffd9a0');
+  bigText('into the sack you go...',H*0.36+38,20,'#fff');
+  bigText('(he only wants you for his garden show)',H*0.36+66,15,'rgba(255,255,255,0.7)');
 }
 function drawDead(){
   overlay(0.55);
@@ -2147,7 +2801,7 @@ function wrapText(txt,cxp,y,maxw,lh){
 function drawWin(){
   overlay(0.5);
   bigText('SILENT BUT VICTORIOUS',H*0.32,44,'#a8d84a');
-  bigText('all 6 levels cleared!',H*0.32+36,22,'#ffd9a0');
+  bigText('all 7 levels cleared!',H*0.32+36,22,'#ffd9a0');
   bigText('score '+G.score+'  ·  coins '+G.coins+'  ·  toots '+G.toots,H*0.32+70,20,'#fff');
   bigText('best '+G.best,H*0.32+98,16,'#fff');
   if(Math.floor(G.time*2)%2===0) bigText('PRESS SPACE · PICK A NEW BUNNY',H*0.68,22,'#8ed8f8');
